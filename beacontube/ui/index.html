@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BeaconTube</title>
+    <!-- Relative addresses only: Beacon serves this page from its own
+         address, and only relative ones follow it there. -->
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="standalone" class="notice" hidden>
+      Open this page from its tab in Beacon to play music. On its own it can only fetch and list links.
+    </div>
+    <main>
+      <section id="banner" class="detail-header" hidden></section>
+      <form id="form" autocomplete="off">
+        <input id="url" type="text" inputmode="url" placeholder="Paste a link, e.g. a YouTube video" />
+        <button type="submit" class="pill">Play</button>
+      </form>
+      <p id="note" role="status"></p>
+      <div class="lists">
+        <section>
+          <h2>Last played</h2>
+          <ul id="recent"></ul>
+        </section>
+        <section>
+          <h2>Most played</h2>
+          <ul id="most-played"></ul>
+        </section>
+      </div>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+[project]
+name = "beacon-beacontube"
+version = "1.0.0"
+description = "A Beacon external source that plays links from YouTube and other sites with yt-dlp"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "starlette>=1.0",
+    "uvicorn>=0.40",
+    "yt-dlp",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["ignore:Using `httpx`"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
