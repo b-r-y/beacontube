@@ -69,4 +69,4 @@ uv run ruff format . && uv run ruff check .
 
 The page is plain HTML, CSS and JavaScript in `beacontube/ui/`, no build step. The
 contract with Beacon is in Beacon's help under **External source API**
-([`docs/help/reference/external-source-api.md`](../../help/reference/external-source-api.md)).
+([`docs/help/reference/external-source-api.md`](https://github.com/mihaitom/beacon/blob/main/docs/help/reference/external-source-api.md)).
