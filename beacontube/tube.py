@@ -19,8 +19,8 @@ import yt_dlp
 
 HISTORY_LENGTH = 10
 MAX_URL_LENGTH = 2048
-# Songs that left the history keep their files this long, so a queue
-# restored later still plays.
+# Songs that left the lists keep their files this long, so a queue restored
+# later still plays. Beacon asks for at least a day; KEEP_HOURS sets more.
 KEEP_AFTER_SECONDS = 24 * 3600
 
 AUDIO_TYPES = {
@@ -126,6 +126,7 @@ class Tube:
         history_file: Path,
         plays_file: Path | None = None,
         fetch: Callable[[str, Path], Song] = download,
+        keep_seconds: float = KEEP_AFTER_SECONDS,
     ):
         self.cache = cache
         self.history_file = history_file
@@ -135,6 +136,7 @@ class Tube:
         # process, and a second click on the same link then waits for the first.
         self.lock = threading.Lock()
         cache.mkdir(parents=True, exist_ok=True)
+        self.keep_seconds = keep_seconds
 
     def play(self, url) -> dict:
         """Download (or reuse) the link's audio, put it at the top of the
@@ -215,7 +217,7 @@ class Tube:
 
     def _prune(self, entries: list[dict], most: list[dict]) -> None:
         """Delete the audio of songs neither in the history nor among the most
-        played, a day after they left both."""
+        played, once they have been out of both for keep_seconds."""
         kept = {Path(e["name"]).stem for e in [*entries, *most]}
         now = time.time()
         for path in self.cache.iterdir():
@@ -224,5 +226,5 @@ class Tube:
             if path.stem in kept:
                 # Still listed: the day starts only once it is not.
                 os.utime(path, (now, now))
-            elif path.stat().st_mtime < now - KEEP_AFTER_SECONDS:
+            elif path.stat().st_mtime < now - self.keep_seconds:
                 path.unlink(missing_ok=True)

@@ -1,7 +1,11 @@
 import os
 import time
 
-from beacontube.tube import HISTORY_LENGTH, KEEP_AFTER_SECONDS
+import pytest
+from conftest import fake_download
+
+from beacontube.config import load
+from beacontube.tube import HISTORY_LENGTH, KEEP_AFTER_SECONDS, Tube
 
 OLD = "https://www.youtube.com/watch?v=old0"
 
@@ -59,3 +63,42 @@ def test_a_removed_song_keeps_its_files_for_a_day(make_client):
     client.post("/ui/api/most-played/remove", json={"url": OLD})
     play(client, "https://www.youtube.com/watch?v=next")
     assert files and all(path.exists() for path in files)
+
+
+def test_keep_hours_sets_how_long_files_stay(tmp_path):
+    tube = Tube(
+        tmp_path / "cache", tmp_path / "history.json", fetch=fake_download, keep_seconds=48 * 3600
+    )
+    tube.play(OLD)
+    files = sorted((tmp_path / "cache").iterdir())
+    for n in range(HISTORY_LENGTH):
+        for _ in range(2):
+            tube.play(f"https://www.youtube.com/watch?v=other{n:02d}")
+    age(files, 30 * 3600)
+    tube.play("https://www.youtube.com/watch?v=next")
+    assert all(path.exists() for path in files)
+    age(files, 50 * 3600)
+    tube.play("https://www.youtube.com/watch?v=last")
+    assert not any(path.exists() for path in files)
+
+
+def test_keep_hours_comes_from_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("KEEP_HOURS", raising=False)
+    assert load().keep_hours == 24
+    monkeypatch.setenv("KEEP_HOURS", "168")
+    assert load().keep_hours == 168
+
+
+def test_keep_hours_is_at_least_a_day(monkeypatch, tmp_path, caplog):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("KEEP_HOURS", "2")
+    assert load().keep_hours == 24
+    assert "less than a day" in caplog.text
+
+
+def test_keep_hours_has_to_be_a_number(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("KEEP_HOURS", "a week")
+    with pytest.raises(SystemExit, match="KEEP_HOURS"):
+        load()

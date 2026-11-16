@@ -1,5 +1,6 @@
 """Settings, from the environment."""
 
+import logging
 import os
 import secrets
 from dataclasses import dataclass
@@ -17,6 +18,12 @@ class Config:
     secret: bytes
     host: str
     port: int
+    # How long a song's audio stays after it left the history and the most
+    # played list. Beacon asks for a day at least.
+    keep_hours: float = 24
+
+
+MIN_KEEP_HOURS = 24
 
 
 def _secret(data_dir: Path) -> bytes:
@@ -36,6 +43,23 @@ def _secret(data_dir: Path) -> bytes:
         return value
 
 
+def _keep_hours() -> float:
+    raw = os.environ.get("KEEP_HOURS", "")
+    if not raw:
+        return MIN_KEEP_HOURS
+    try:
+        hours = float(raw)
+    except ValueError:
+        raise SystemExit(f"KEEP_HOURS has to be a number of hours, not {raw!r}.") from None
+    if hours < MIN_KEEP_HOURS:
+        logging.getLogger("beacontube").warning(
+            f"KEEP_HOURS={raw} is less than a day; keeping files for {MIN_KEEP_HOURS} hours,"
+            " since Beacon may ask for a song again within a day."
+        )
+        return MIN_KEEP_HOURS
+    return hours
+
+
 def load() -> Config:
     data_dir = Path(os.environ.get("DATA_DIR", "data")).expanduser().resolve()
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -48,4 +72,5 @@ def load() -> Config:
         secret=_secret(data_dir),
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8802")),
+        keep_hours=_keep_hours(),
     )
