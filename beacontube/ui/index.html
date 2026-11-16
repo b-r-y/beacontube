@@ -33,6 +33,21 @@
         <kbd class="search__key" aria-hidden="true">/</kbd>
         <button id="go" type="submit" class="pill">Search</button>
       </form>
+      <nav class="tabs" role="tablist" aria-label="View">
+        <button type="button" class="tab is-active" role="tab" aria-selected="true" data-view="home">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
+          <span class="tab__label">Home</span>
+        </button>
+        <button type="button" class="tab" role="tab" aria-selected="false" data-view="library">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-1 9h-4v4h-2v-4H9V9h4V5h2v4h4z"
+            />
+          </svg>
+          <span class="tab__label">Library</span>
+          <span id="library-tab-count" class="tab__count"></span>
+        </button>
+      </nav>
     </div>
 
     <main>
@@ -44,15 +59,50 @@
         <ul id="result-list" class="cards"></ul>
       </section>
 
-      <section class="section">
-        <h2 class="section-title">Recently played</h2>
-        <ul id="recent" class="tiles"></ul>
-      </section>
+      <div id="home-view">
+        <section class="section">
+          <h2 class="section-title">Recently played</h2>
+          <ul id="recent" class="tiles"></ul>
+        </section>
 
-      <section class="section">
-        <h2 class="section-title">Most played</h2>
-        <ol id="most-played" class="ranked"></ol>
-      </section>
+        <div class="split">
+          <section class="section">
+            <div class="section__head">
+              <h2 class="section-title">Most played</h2>
+              <button type="button" class="link-btn" data-view="library" data-sort="plays">Show all</button>
+            </div>
+            <ol id="most-played" class="ranked"></ol>
+          </section>
+
+          <section class="section">
+            <h2 class="section-title">Top channels</h2>
+            <ol id="channels" class="ranked"></ol>
+          </section>
+        </div>
+      </div>
+
+      <div id="library-view" hidden>
+        <section class="section">
+          <div class="section__head">
+            <h2 class="section-title">Library <span id="library-count" class="section-title__count"></span></h2>
+          </div>
+          <div class="library-controls">
+            <div class="filter">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M10 18h4v-2h-4zM3 6v2h18V6zm3 7h12v-2H6z" />
+              </svg>
+              <input id="library-filter" type="search" placeholder="Filter by title or channel" aria-label="Filter the library" />
+            </div>
+            <select id="library-sort" class="sort" aria-label="Sort the library">
+              <option value="recent">Recently played</option>
+              <option value="plays">Most played</option>
+              <option value="title">Title</option>
+              <option value="channel">Channel</option>
+            </select>
+          </div>
+          <ul id="library-list" class="library"></ul>
+        </section>
+      </div>
     </main>
 
     <div id="toast" class="toast" role="status"></div>

@@ -81,12 +81,21 @@ def create_app(config: Config, tube: Tube | None = None):
         # Under /ui/: the page shows these itself, and only /ui/ reaches it.
         return cover_response(request, request.path_params["name"])
 
+    def page_cover_of(entry: dict) -> str | None:
+        """The picture the page shows for a song: its own while the file is
+        here, otherwise the video's thumbnail, which needs no download."""
+        cover = entry.get("cover")
+        if cover and tube.file(cover):
+            return f"covers/{cover}"
+        found = search.video_id(entry["url"])
+        return f"thumbnails/{found}" if found else None
+
     def listed(entry: dict) -> dict:
         return {
             "url": entry["url"],
             "playedAt": entry["playedAt"],
             "plays": entry.get("count"),
-            "cover": f"covers/{entry['cover']}" if entry.get("cover") else None,
+            "cover": page_cover_of(entry),
             "item": item_of(entry),
         }
 
@@ -95,6 +104,11 @@ def create_app(config: Config, tube: Tube | None = None):
 
     async def most_played(request: Request):
         return JSONResponse([listed(entry) for entry in tube.most_played()])
+
+    async def library(request: Request):
+        return JSONResponse(
+            [{**listed(entry), "cached": entry["cached"]} for entry in tube.library()]
+        )
 
     async def forget_history(request: Request):
         url = await link_in(request)
@@ -142,6 +156,7 @@ def create_app(config: Config, tube: Tube | None = None):
         Route("/ui/", page),
         Route("/ui/api/history", history),
         Route("/ui/api/most-played", most_played),
+        Route("/ui/api/library", library),
         Route("/ui/api/history/remove", forget_history, methods=["POST"]),
         Route("/ui/api/most-played/remove", forget_plays, methods=["POST"]),
         Route("/ui/api/play", play, methods=["POST"]),

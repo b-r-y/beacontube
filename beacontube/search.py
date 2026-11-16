@@ -3,6 +3,7 @@ pictures, so the page loads nothing from anywhere but this app."""
 
 import re
 import urllib.request
+from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
 
@@ -15,6 +16,19 @@ VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 LIVE = {"is_live", "is_upcoming", "post_live"}
 THUMBNAIL_URL = "https://i.ytimg.com/vi/{}/mqdefault.jpg"
 MAX_THUMBNAIL_BYTES = 512 * 1024
+
+
+def video_id(url: str) -> str | None:
+    """The YouTube video a link plays, if it is one."""
+    parts = urlsplit(url)
+    host = parts.netloc.lower().removeprefix("www.").removeprefix("m.")
+    if host == "youtu.be":
+        found = parts.path.strip("/")
+    elif host in ("youtube.com", "music.youtube.com"):
+        found = parse_qs(parts.query).get("v", [""])[0]
+    else:
+        return None
+    return found if VIDEO_ID.match(found) else None
 
 
 def search(query) -> list[dict]:

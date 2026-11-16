@@ -15,6 +15,10 @@ so the page loads nothing from elsewhere.
 - A site's picture is kept with the song as its cover, when the site has one.
 - The history lives on the server, in `data/history.json`, since the page cannot keep
   anything in the browser.
+- The Library tab lists every link ever played (`data/plays.json`), to filter and sort.
+  A song whose audio was cleaned up shows a cloud and downloads again when played. Beside
+  Most played, Top channels counts the plays per channel; a channel opens its songs in
+  the Library.
 - A song that drops out of the history keeps its file for a day, so a queue restored
   later still plays. After that the file is deleted.
 - One download runs at a time. A second link waits for the first.

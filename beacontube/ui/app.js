@@ -7,6 +7,12 @@ const ICONS = {
   history:
     '<path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.95 8.95 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>',
   chart: '<path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>',
+  home: '<path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>',
+  library:
+    '<path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m-1 9h-4v4h-2v-4H9V9h4V5h2v4h4z"/>',
+  cloud:
+    '<path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96M17 13l-5 5-5-5h3V9h4v4z"/>',
+  channel: '<path d="M12 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8m0 10c4.42 0 8 1.79 8 4v2H4v-2c0-2.21 3.58-4 8-4"/>',
   search:
     '<path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"/>',
 }
@@ -43,11 +49,21 @@ const resultsTitle = $('results-title')
 const resultList = $('result-list')
 const recentList = $('recent')
 const topList = $('most-played')
+const channelList = $('channels')
+const homeView = $('home-view')
+const libraryView = $('library-view')
+const libraryList = $('library-list')
+const libraryCount = $('library-count')
+const libraryFilter = $('library-filter')
+const librarySort = $('library-sort')
 const toastBox = $('toast')
 
 let recent = []
 let mostPlayed = []
 let found = []
+// Every link ever played, from the app; the channels are counted from it.
+let library = []
+let view = 'home'
 // The link being fetched: yt-dlp downloads one at a time, so one is enough.
 let pending = null
 // What Beacon says is playing: {title, artist, album} or null.
@@ -119,8 +135,30 @@ async function forget(list, url) {
 }
 
 async function load() {
-  ;[recent, mostPlayed] = await Promise.all([fetchJSON('api/history'), fetchJSON('api/most-played')])
+  ;[recent, mostPlayed, library] = await Promise.all([
+    fetchJSON('api/history'),
+    fetchJSON('api/most-played'),
+    fetchJSON('api/library'),
+  ])
   renderAll()
+}
+
+// --- the two views ---------------------------------------------------------------
+
+function show(next, { sort, filter } = {}) {
+  view = next
+  if (sort) librarySort.value = sort
+  if (filter !== undefined) libraryFilter.value = filter
+  homeView.hidden = next !== 'home'
+  hero.hidden = next !== 'home'
+  libraryView.hidden = next !== 'library'
+  for (const tab of document.querySelectorAll('[data-view]')) {
+    const active = tab.dataset.view === next
+    tab.classList.toggle('is-active', active)
+    tab.setAttribute('aria-selected', String(active))
+  }
+  renderLibrary()
+  scrollTo({ top: 0 })
 }
 
 async function find(query) {
@@ -261,7 +299,7 @@ function renderTop() {
           <div class="song__sub">${esc(joined(item.artist, item.duration && minutes(item.duration)))}</div>
         </div>
         <span class="song__plays">${plays} ${plays === 1 ? 'play' : 'plays'}</span>
-        <div class="song__actions">${actions(url, item.title, { remove: { list: 'most-played', label: 'Remove from most played' } })}</div>
+        <div class="song__actions">${actions(url, item.title, { remove: { list: 'most-played', label: 'Remove from most played and the library' } })}</div>
       </li>`
         })
         .join('')
@@ -299,10 +337,106 @@ function renderResults() {
     : empty('search', 'Nothing found', 'Try other words, or paste the link itself.')
 }
 
+// The channels most listened to, counted over the whole library: their
+// plays together, their songs, and the picture of the one played most.
+function channels() {
+  const byName = new Map()
+  for (const entry of library) {
+    const name = entry.item.artist
+    if (!name) continue
+    const channel = byName.get(name) ?? { name, plays: 0, songs: 0, cover: null, best: -1 }
+    channel.plays += entry.plays || 0
+    channel.songs += 1
+    if ((entry.plays || 0) > channel.best) {
+      channel.best = entry.plays || 0
+      channel.cover = entry.cover
+    }
+    byName.set(name, channel)
+  }
+  return [...byName.values()]
+    .sort((a, b) => b.plays - a.plays || a.name.localeCompare(b.name))
+    .slice(0, 10)
+}
+
+function renderChannels() {
+  const top = channels()
+  const most = top[0]?.plays || 1
+  channelList.innerHTML = top.length
+    ? top
+        .map(
+          (channel, index) => `
+      <li class="channel" data-channel="${esc(channel.name)}" title="Show ${esc(channel.name)} in the library">
+        <span class="song__rank">${index + 1}</span>
+        ${channel.cover ? `<img class="channel__img" src="${esc(channel.cover)}" alt="" loading="lazy">` : `<span class="channel__img channel__img--empty">${icon('channel')}</span>`}
+        <div class="channel__text">
+          <div class="song__title">${esc(channel.name)}</div>
+          <div class="channel__meter"><span style="width:${Math.max(4, (channel.plays / most) * 100)}%"></span></div>
+        </div>
+        <span class="song__plays">${channel.plays} ${channel.plays === 1 ? 'play' : 'plays'}</span>
+        <div class="song__actions">
+          <button class="icon-btn" data-search="${esc(channel.name)}" title="Search YouTube for ${esc(channel.name)}">${icon('search')}</button>
+        </div>
+      </li>`,
+        )
+        .join('')
+    : empty('channel', 'No channels yet', 'The channels you listen to most line up here.')
+}
+
+const SORTS = {
+  recent: (a, b) => b.playedAt - a.playedAt,
+  plays: (a, b) => (b.plays || 0) - (a.plays || 0) || b.playedAt - a.playedAt,
+  title: (a, b) => a.item.title.localeCompare(b.item.title),
+  channel: (a, b) =>
+    (a.item.artist || '').localeCompare(b.item.artist || '') ||
+    a.item.title.localeCompare(b.item.title),
+}
+
+function renderLibrary() {
+  $('library-tab-count').textContent = library.length || ''
+  if (view !== 'library') return
+  const words = libraryFilter.value.toLowerCase().split(/\s+/).filter(Boolean)
+  const shown = library
+    .filter((entry) => {
+      const text = `${entry.item.title} ${entry.item.artist}`.toLowerCase()
+      return words.every((word) => text.includes(word))
+    })
+    .sort(SORTS[librarySort.value])
+  libraryCount.textContent =
+    shown.length === library.length
+      ? `${library.length} ${library.length === 1 ? 'song' : 'songs'}`
+      : `${shown.length} of ${library.length}`
+  if (!library.length) {
+    libraryList.innerHTML = empty('library', 'Your library is empty', 'Every link you play is kept here, however long ago.')
+    return
+  }
+  if (!shown.length) {
+    libraryList.innerHTML = empty('search', 'Nothing matches', 'Try fewer words, or search YouTube above.')
+    return
+  }
+  libraryList.innerHTML = shown
+    .map(({ url, cover, plays, playedAt, cached, item }) => {
+      const playing = isPlaying(item)
+      return `
+      <li class="entry ${stateClass(url, item)}" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="now">
+        <div class="entry__art">${picture(cover, 'entry__img')}<span class="tile__mark">${playing ? BARS : icon('play')}</span></div>
+        <div class="entry__text">
+          <div class="song__title">${esc(item.title)}${cached ? '' : `<span class="entry__fetch" title="Its audio was cleaned up; it downloads again when played">${icon('cloud')}</span>`}</div>
+          <div class="song__sub">${esc(joined(item.artist, item.duration && minutes(item.duration)))}</div>
+        </div>
+        <span class="entry__when">${esc(when(playedAt))}</span>
+        <span class="entry__plays">${plays} ${plays === 1 ? 'play' : 'plays'}</span>
+        <div class="entry__actions">${actions(url, item.title, { remove: { list: 'most-played', label: 'Remove from the library' } })}</div>
+      </li>`
+    })
+    .join('')
+}
+
 function renderAll() {
   renderHero()
   renderRecent()
   renderTop()
+  renderChannels()
+  renderLibrary()
   renderResults()
 }
 
@@ -339,10 +473,18 @@ input.addEventListener('keydown', (event) => {
   }
 })
 $('close-results').addEventListener('click', closeResults)
+libraryFilter.addEventListener('input', renderLibrary)
+librarySort.addEventListener('change', renderLibrary)
+libraryFilter.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    libraryFilter.value = ''
+    renderLibrary()
+  }
+})
 
 // "/" jumps to the search from anywhere, as on many sites.
 addEventListener('keydown', (event) => {
-  const typing = event.target instanceof HTMLInputElement
+  const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement
   if (event.key === '/' && !typing && !event.ctrlKey && !event.metaKey) {
     event.preventDefault()
     input.focus()
@@ -370,6 +512,16 @@ addEventListener('paste', (event) => {
 // One handler for every list: a button says how to play (or removes), and
 // anywhere else on a row, tile or card plays it now.
 document.addEventListener('click', (event) => {
+  const tab = event.target.closest('[data-view]')
+  if (tab) return show(tab.dataset.view, { sort: tab.dataset.sort })
+  const searching = event.target.closest('[data-search]')
+  if (searching) {
+    input.value = searching.dataset.search
+    label()
+    return find(searching.dataset.search)
+  }
+  const channel = event.target.closest('[data-channel]')
+  if (channel) return show('library', { sort: 'plays', filter: channel.dataset.channel })
   const removing = event.target.closest('[data-remove]')
   if (removing) return forget(removing.dataset.remove, removing.dataset.url)
   const target = event.target.closest('[data-url][data-mode]')

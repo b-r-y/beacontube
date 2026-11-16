@@ -163,6 +163,14 @@ class Tube:
         with self.lock:
             return self._most(self._load(self.plays_file, dict))
 
+    def library(self) -> list[dict]:
+        """Every link ever played, newest first, each saying whether its audio
+        is still here. One that is not is downloaded again when played."""
+        with self.lock:
+            plays = self._load(self.plays_file, dict)
+        entries = sorted(plays.values(), key=lambda e: -e["playedAt"])
+        return [{**e, "cached": self.file(e["name"]) is not None} for e in entries]
+
     def forget_history(self, url: str) -> None:
         """Take a link out of the last played list. Its audio goes with the
         usual clean-up, a day later."""

@@ -30,6 +30,11 @@
   box-sizing: border-box;
 }
 
+/* A class that sets display must not bring a hidden element back. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   padding: 24px 24px 72px;
@@ -296,6 +301,9 @@ button {
   position: sticky;
   top: 0;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin: 0 -24px;
   padding: 10px 24px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
@@ -304,10 +312,60 @@ button {
 
 .search {
   position: relative;
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
   max-width: 760px;
+}
+
+/* Home and Library: a segmented control, Beacon's 12px tile radius. */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.is-active {
+  color: var(--primary);
+  background: var(--hover);
+}
+
+.tab__count {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.tab__count:empty {
+  display: none;
 }
 
 .search__icon {
@@ -393,6 +451,35 @@ button {
 .section > .section-title,
 .section__head {
   margin-bottom: 14px;
+}
+
+.section-title__count {
+  margin-left: 6px;
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.link-btn:hover {
+  color: var(--primary);
+}
+
+/* Most played and the top channels side by side. */
+.split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 40px;
 }
 
 /* --- search results: cards ------------------------------------------------------- */
@@ -662,13 +749,9 @@ button {
 
 /* --- most played: Beacon's ranked songs ------------------------------------------ */
 
-/* Five to a column, ranked down the first and on into the next. */
 .ranked {
   display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(5, auto);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: 32px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .song {
@@ -731,6 +814,241 @@ button {
 .song:hover .song__actions,
 .song:focus-within .song__actions {
   display: flex;
+}
+
+/* --- top channels ---------------------------------------------------------------- */
+
+.channel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 0;
+  transition: background-color 0.15s;
+}
+
+.channel:hover {
+  background: var(--hover);
+}
+
+/* A channel is a person, not a record: round, as Beacon draws an artist. */
+.channel__img {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.channel__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Its share of the plays, against the channel played most. */
+.channel__meter {
+  height: 4px;
+  margin-top: 7px;
+  border-radius: 2px;
+  background: var(--faint);
+  overflow: hidden;
+}
+
+.channel__meter span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary) 55%, transparent),
+    var(--primary)
+  );
+}
+
+.channel:hover .song__plays,
+.channel:focus-within .song__plays {
+  display: none;
+}
+
+.channel:hover .song__actions,
+.channel:focus-within .song__actions {
+  display: flex;
+}
+
+/* --- the library ----------------------------------------------------------------- */
+
+/* Beacon's filter row: flat 40px pills on one surface. */
+.library-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.filter {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 320px;
+  max-width: 100%;
+}
+
+.filter svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.filter input,
+.sort {
+  height: 40px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  /* The type floor again: 16px in anything that takes focus. */
+  font:
+    16px Inter,
+    system-ui,
+    sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.filter input {
+  width: 100%;
+  padding: 0 14px 0 40px;
+}
+
+.filter input::placeholder {
+  color: var(--muted);
+}
+
+.filter input:focus,
+.sort:focus {
+  border-color: color-mix(in srgb, var(--primary) 60%, transparent);
+}
+
+.sort {
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.library {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 110px 72px 176px;
+  align-items: center;
+  column-gap: 14px;
+  height: 64px;
+  padding: 0 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+/* Hairlines between rows only, never after the last. */
+.entry + .entry {
+  border-top: 1px solid var(--hairline);
+}
+
+.entry:hover {
+  background: var(--hover);
+}
+
+.entry__art {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.entry__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.entry .tile__mark {
+  inset: 10px;
+}
+
+.entry:hover .tile__mark,
+.entry.is-playing .tile__mark {
+  opacity: 1;
+}
+
+.entry__text {
+  min-width: 0;
+}
+
+.entry.is-playing .song__title {
+  color: var(--primary);
+}
+
+.entry__fetch svg {
+  width: 15px;
+  height: 15px;
+  margin-left: 8px;
+  vertical-align: -2px;
+  color: var(--muted);
+}
+
+.entry__when,
+.entry__plays {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* A fixed column, so rows do not shift when their buttons appear. */
+.entry__actions {
+  display: flex;
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.entry:hover .entry__actions,
+.entry:focus-within .entry__actions {
+  opacity: 1;
+}
+
+.is-pending .entry__art::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--primary);
+  animation: spin 0.9s linear infinite;
+}
+
+.is-pending .entry__art .tile__mark {
+  opacity: 0 !important;
 }
 
 /* --- states ---------------------------------------------------------------------- */
@@ -880,23 +1198,16 @@ button {
 
 /* --- widths ---------------------------------------------------------------------- */
 
-@media (min-width: 1500px) {
-  .ranked {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 760px) {
-  .ranked {
-    grid-auto-flow: row;
-    grid-template-rows: none;
+@media (max-width: 900px) {
+  .split {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* Without a pointer nothing is hovered: the buttons stay in view. */
 @media (hover: none) {
-  .card__actions {
+  .card__actions,
+  .entry__actions {
     opacity: 1;
   }
 
@@ -971,15 +1282,56 @@ button {
   .search-bar {
     margin: 0 -12px;
     padding: 8px 12px;
+    gap: 8px;
+  }
+
+  /* Icons only: the bar has a phone's width to share with the search. */
+  .tab {
+    height: 40px;
+    padding: 0 10px;
+  }
+
+  .tab__label,
+  .tab__count {
+    display: none;
+  }
+
+  .filter {
+    flex: 1;
+    width: auto;
+  }
+
+  .entry {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    height: 60px;
+    padding: 0 2px;
+  }
+
+  .entry__when,
+  .entry__plays {
+    display: none;
+  }
+
+  .entry__actions .icon-btn {
+    display: none;
+  }
+
+  .entry__actions .icon-btn[data-mode='queue'] {
+    display: grid;
   }
 
   .search__key {
     display: none;
   }
 
+  /* The keyboard's own search key does what this button does; the room
+     goes to the field and the tabs. */
   .search .pill {
-    min-width: 0;
-    padding: 0 16px;
+    display: none;
+  }
+
+  .search input {
+    padding-right: 14px;
   }
 
   .section {

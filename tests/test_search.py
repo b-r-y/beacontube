@@ -99,3 +99,17 @@ def test_a_missing_thumbnail_is_a_404(make_client, monkeypatch):
 
     monkeypatch.setattr(search_module.urllib.request, "urlopen", urlopen)
     assert make_client().get("/ui/thumbnails/aaaaaaaaaaa").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("https://www.youtube.com/watch?v=aaaaaaaaaaa", "aaaaaaaaaaa"),
+        ("https://youtu.be/aaaaaaaaaaa", "aaaaaaaaaaa"),
+        ("https://music.youtube.com/watch?v=aaaaaaaaaaa&list=x", "aaaaaaaaaaa"),
+        ("https://www.youtube.com/watch?v=../../x", None),
+        ("https://soundcloud.com/a/b", None),
+    ],
+)
+def test_video_id(url, expected):
+    assert search_module.video_id(url) == expected
