@@ -1,4 +1,10 @@
-from beacontube.tube import TubeError
+import threading
+
+import pytest
+from conftest import fake_download
+
+import beacontube.tube as tube_module
+from beacontube.tube import Tube, TubeError
 
 
 def play(client, url):
@@ -157,3 +163,73 @@ def test_removing_an_unknown_link_is_harmless(make_client):
     client = make_client()
     assert client.post("/ui/api/history/remove", json={"url": "nope"}).json() == {"ok": True}
     assert client.post("/ui/api/most-played/remove", json={}).json() == {"ok": True}
+
+
+def test_the_lists_answer_while_a_download_runs(tmp_path):
+    started, finish = threading.Event(), threading.Event()
+
+    def slow_download(url, cache):
+        started.set()
+        finish.wait(5)
+        return fake_download(url, cache)
+
+    tube = Tube(tmp_path / "cache", tmp_path / "history.json", fetch=slow_download)
+    playing = threading.Thread(target=tube.play, args=("https://www.youtube.com/watch?v=slow",))
+    playing.start()
+    assert started.wait(5)
+
+    answers = []
+    reader = threading.Thread(target=lambda: answers.append((tube.history(), tube.most_played())))
+    reader.start()
+    reader.join(1)
+    finish.set()
+    playing.join(5)
+    assert answers == [([], [])]
+    assert tube.history()[0]["url"] == "https://www.youtube.com/watch?v=slow"
+
+
+class FakeYoutubeDL:
+    """Stands in for yt_dlp.YoutubeDL in download(): returns the given info."""
+
+    info: dict = {}
+    downloaded = False
+
+    def __init__(self, options):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def extract_info(self, url, download):
+        assert download is False
+        return dict(self.info)
+
+    def process_ie_result(self, info, download):
+        FakeYoutubeDL.downloaded = True
+        return info
+
+    def prepare_filename(self, info):
+        return f"/nowhere/{info['id']}.m4a"
+
+
+@pytest.mark.parametrize("live", [{"is_live": True}, {"live_status": "is_upcoming"}])
+def test_live_streams_are_refused_before_downloading(monkeypatch, tmp_path, live):
+    monkeypatch.setattr(FakeYoutubeDL, "info", {"id": "x", "title": "Live", **live})
+    monkeypatch.setattr(FakeYoutubeDL, "downloaded", False)
+    monkeypatch.setattr(tube_module.yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    with pytest.raises(TubeError, match="Live streams"):
+        tube_module.download("https://www.youtube.com/watch?v=live", tmp_path)
+    assert FakeYoutubeDL.downloaded is False
+
+
+def test_videos_are_downloaded(monkeypatch, tmp_path):
+    info = {"id": "x", "title": "A video", "live_status": "was_live", "duration": 60}
+    monkeypatch.setattr(FakeYoutubeDL, "info", info)
+    monkeypatch.setattr(FakeYoutubeDL, "downloaded", False)
+    monkeypatch.setattr(tube_module.yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    song = tube_module.download("https://www.youtube.com/watch?v=x", tmp_path)
+    assert FakeYoutubeDL.downloaded is True
+    assert (song.name, song.title, song.duration) == ("x.m4a", "A video", 60)

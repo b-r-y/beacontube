@@ -39,6 +39,9 @@ COVER_TYPES = {
     ".png": "image/png",
     ".webp": "image/webp",
 }
+# yt-dlp's live_status values for a stream that is running, about to start,
+# or just ended and not yet a video.
+LIVE_STATUSES = {"is_live", "is_upcoming", "post_live"}
 # What yt-dlp writes with restrictfilenames: no spaces, no slashes.
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -94,7 +97,12 @@ def download(url: str, cache: Path) -> Song:
     }
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
+            # Look first, download after: a live stream would download for as
+            # long as it runs, and hold up every other link meanwhile.
+            info = ydl.extract_info(url, download=False)
+            if info.get("is_live") or info.get("live_status") in LIVE_STATUSES:
+                raise TubeError("Live streams can't be played, only videos")
+            info = ydl.process_ie_result(info, download=True)
             filename = Path(ydl.prepare_filename(info))
     except yt_dlp.utils.YoutubeDLError as error:
         message = str(error).removeprefix("ERROR: ").strip()
@@ -130,8 +138,11 @@ class Tube:
         self.history_file = history_file
         self.plays_file = plays_file or history_file.with_name("plays.json")
         self.fetch = fetch
-        # One download at a time: yt-dlp is not built for parallel runs in one
+        # One play at a time: yt-dlp is not built for parallel runs in one
         # process, and a second click on the same link then waits for the first.
+        self.playing = threading.Lock()
+        # Guards the history and play counts. Held only while they are read or
+        # written, never during a download, so the lists answer meanwhile.
         self.lock = threading.Lock()
         cache.mkdir(parents=True, exist_ok=True)
 
@@ -139,20 +150,23 @@ class Tube:
         """Download (or reuse) the link's audio, put it at the top of the
         history and count it. Returns the history entry."""
         url = checked(url)
-        with self.lock:
+        # The clean-up below runs before the next play starts, so it never
+        # deletes a file that play is about to list.
+        with self.playing:
             song = self.fetch(url, self.cache)
-            now = time.time()
-            entry = {**asdict(song), "playedAt": now}
-            entries = [e for e in self._load(self.history_file) if e["url"] != url]
-            entries = [entry, *entries][:HISTORY_LENGTH]
-            self._save(self.history_file, entries)
+            with self.lock:
+                now = time.time()
+                entry = {**asdict(song), "playedAt": now}
+                entries = [e for e in self._load(self.history_file) if e["url"] != url]
+                entries = [entry, *entries][:HISTORY_LENGTH]
+                self._save(self.history_file, entries)
 
-            plays = self._load(self.plays_file, dict)
-            counted = plays.get(url, {}).get("count", 0)
-            plays[url] = {**entry, "count": counted + 1}
-            self._save(self.plays_file, plays)
+                plays = self._load(self.plays_file, dict)
+                counted = plays.get(url, {}).get("count", 0)
+                plays[url] = {**entry, "count": counted + 1}
+                self._save(self.plays_file, plays)
 
-            self._prune(entries, self._most(plays))
+                self._prune(entries, self._most(plays))
             return entry
 
     def history(self) -> list[dict]:

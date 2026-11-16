@@ -14,7 +14,10 @@ Beacon, with a field for the link, a Play button, and the last 10 links played.
   anything in the browser.
 - A song that drops out of the history keeps its file for a day, so a queue restored
   later still plays. After that the file is deleted.
-- One download runs at a time. A second link waits for the first.
+- One download runs at a time. A second link waits for the first. The page and songs
+  already downloaded keep playing meanwhile.
+- Live streams are refused, since they would download for as long as they run. A
+  stream's recording plays once the site has made it a video.
 
 ## Running it
 
