@@ -265,7 +265,42 @@ svg {
   color: inherit;
 }
 
+.pill.small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+.results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+
+.results-head h2 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+}
+
+input[type='search']::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
 @media (max-width: 760px) {
+  .result-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .lists {
     grid-template-columns: 1fr;
     gap: 0;

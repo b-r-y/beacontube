@@ -19,6 +19,10 @@ const when = (seconds) =>
 
 const form = document.getElementById('form')
 const input = document.getElementById('url')
+const go = document.getElementById('go')
+const results = document.getElementById('results')
+const resultsTitle = document.getElementById('results-title')
+const resultList = document.getElementById('result-list')
 const note = document.getElementById('note')
 const banner = document.getElementById('banner')
 const recentList = document.getElementById('recent')
@@ -28,6 +32,10 @@ let recent = []
 let mostPlayed = []
 let busy = false
 let answered = null
+let searched = 0
+
+// A link plays; anything else is searched for.
+const isLink = (text) => /^https?:\/\/\S+$/i.test(text.trim())
 
 function say(text, error = false) {
   note.textContent = text
@@ -69,6 +77,50 @@ async function play(url, mode) {
   } finally {
     busy = false
   }
+}
+
+async function find(query) {
+  const asked = ++searched
+  say('Searching…')
+  results.hidden = false
+  resultsTitle.textContent = `Results for “${query}”`
+  resultList.innerHTML = '<li class="empty">Searching…</li>'
+  let data
+  try {
+    const response = await fetch(`api/search?q=${encodeURIComponent(query)}`)
+    data = await response.json()
+    if (asked !== searched) return
+    if (!response.ok) {
+      resultList.innerHTML = ''
+      return say(data.error || 'The search did not work', true)
+    }
+  } catch {
+    if (asked === searched) say('Could not reach BeaconTube', true)
+    return
+  }
+  say('')
+  resultList.innerHTML = data.length
+    ? data
+        .map(
+          (result) => `
+      <li class="row" data-url="${esc(result.url)}">
+        <img class="thumb" src="${esc(result.thumbnail)}" alt="" loading="lazy">
+        <div class="meta">
+          <div class="title">${esc(result.title)}</div>
+          <div class="sub">${esc([result.artist, result.duration && minutes(result.duration)].filter(Boolean).join(' · '))}</div>
+        </div>
+        <button data-url="${esc(result.url)}" data-mode="now" title="Play">${icon('play')}</button>
+        <button data-url="${esc(result.url)}" data-mode="queue" title="Add to queue">${icon('queue')}</button>
+      </li>`,
+        )
+        .join('')
+    : '<li class="empty">Nothing found</li>'
+}
+
+function closeResults() {
+  searched++
+  results.hidden = true
+  resultList.innerHTML = ''
 }
 
 async function forget(list, url) {
@@ -121,7 +173,7 @@ function renderBanner() {
       <div class="detail-header__content">
         <div class="detail-header__info">
           <div class="detail-header__title">BeaconTube</div>
-          <div class="detail-header__subtitle">Paste a link below to play it</div>
+          <div class="detail-header__subtitle">Search below, or paste a link to play it</div>
         </div>
       </div>`
     return
@@ -176,10 +228,42 @@ function renderList(element, entries, details, line, empty, list, label) {
     : `<li class="empty">${empty}</li>`
 }
 
+function submit(text) {
+  text = text.trim()
+  if (!text) return
+  if (isLink(text)) play(text, 'now')
+  else find(text)
+}
+
 form.addEventListener('submit', (event) => {
   event.preventDefault()
-  const url = input.value.trim()
-  if (url) play(url, 'now')
+  submit(input.value)
+})
+
+// The button says what Enter will do.
+input.addEventListener('input', () => {
+  go.textContent = isLink(input.value) ? 'Play' : 'Search'
+})
+input.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeResults()
+})
+document.getElementById('close-results').addEventListener('click', closeResults)
+
+// A pasted link plays straight away, in the field or anywhere on the page.
+// Pasted words land in the field, to be searched for with Enter.
+addEventListener('paste', (event) => {
+  const text = event.clipboardData?.getData('text') ?? ''
+  if (isLink(text)) {
+    event.preventDefault()
+    input.value = text.trim()
+    go.textContent = 'Play'
+    play(input.value, 'now')
+  } else if (event.target !== input && text.trim()) {
+    event.preventDefault()
+    input.value = text.trim()
+    go.textContent = 'Search'
+    input.focus()
+  }
 })
 
 // A row plays its link; its buttons say how (now or queued) or remove it.
@@ -191,6 +275,7 @@ function onPlayClick(event) {
   const button = event.target.closest('button[data-url]')
   play(target.dataset.url, button?.dataset.mode ?? 'now')
 }
+resultList.addEventListener('click', onPlayClick)
 recentList.addEventListener('click', onPlayClick)
 topList.addEventListener('click', onPlayClick)
 banner.addEventListener('click', onPlayClick)

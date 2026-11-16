@@ -14,7 +14,7 @@ from starlette.responses import FileResponse, JSONResponse, Response, StreamingR
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from . import __version__
+from . import __version__, search
 from .config import Config
 from .signing import sign, verify
 from .tube import AUDIO_TYPES, COVER_TYPES, Tube, TubeError
@@ -113,6 +113,20 @@ def create_app(config: Config, tube: Tube | None = None):
             body = None
         return body.get("url") if isinstance(body, dict) else ""
 
+    async def find(request: Request):
+        try:
+            # yt-dlp blocks while it asks: off the event loop.
+            results = await asyncio.to_thread(search.search, request.query_params.get("q"))
+        except TubeError as error:
+            return JSONResponse({"error": str(error)}, status_code=error.status)
+        return JSONResponse(results)
+
+    async def thumbnail(request: Request):
+        data = await asyncio.to_thread(search.thumbnail, request.path_params["video_id"])
+        if data is None:
+            return Response(status_code=404)
+        return Response(data, media_type="image/jpeg", headers={"cache-control": _IMMUTABLE})
+
     async def play(request: Request):
         url = await link_in(request)
         try:
@@ -131,6 +145,8 @@ def create_app(config: Config, tube: Tube | None = None):
         Route("/ui/api/history/remove", forget_history, methods=["POST"]),
         Route("/ui/api/most-played/remove", forget_plays, methods=["POST"]),
         Route("/ui/api/play", play, methods=["POST"]),
+        Route("/ui/api/search", find),
+        Route("/ui/thumbnails/{video_id}", thumbnail, methods=["GET", "HEAD"]),
         Route("/ui/covers/{name}", page_cover, methods=["GET", "HEAD"]),
         Mount("/ui", app=StaticFiles(directory=UI_DIR)),
         Route("/audio/{sig}/{name}", audio, methods=["GET", "HEAD"]),

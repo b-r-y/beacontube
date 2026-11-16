@@ -2,7 +2,10 @@
 
 A Beacon external source that plays a link you paste: typically a YouTube video, but
 anything [yt-dlp](https://github.com/yt-dlp/yt-dlp) supports. It shows up as its own tab in
-Beacon, with a field for the link, a Play button, and the last 10 links played.
+Beacon, with one field to search YouTube or paste a link, and the last 10 links played.
+A link pasted anywhere on the page plays straight away; words are searched for with Enter,
+and each result plays or goes to the queue. The results' pictures come through the app too,
+so the page loads nothing from elsewhere.
 
 ## How it works
 

@@ -14,11 +14,24 @@
     </div>
     <main>
       <section id="banner" class="detail-header" hidden></section>
-      <form id="form" autocomplete="off">
-        <input id="url" type="text" inputmode="url" placeholder="Paste a link, e.g. a YouTube video" />
-        <button type="submit" class="pill">Play</button>
+      <form id="form" autocomplete="off" role="search">
+        <input
+          id="url"
+          type="search"
+          enterkeyhint="search"
+          placeholder="Search YouTube, or paste a link"
+          aria-label="Search YouTube, or paste a link"
+        />
+        <button id="go" type="submit" class="pill">Search</button>
       </form>
       <p id="note" role="status"></p>
+      <section id="results" hidden>
+        <div class="results-head">
+          <h2 id="results-title">Results</h2>
+          <button id="close-results" type="button" class="pill ghost small">Close</button>
+        </div>
+        <ul id="result-list" class="result-list"></ul>
+      </section>
       <div class="lists">
         <section>
           <h2>Last played</h2>
