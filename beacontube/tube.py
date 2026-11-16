@@ -6,6 +6,7 @@ from YouTube expires within hours and cannot be seeked reliably."""
 
 import glob
 import json
+import os
 import re
 import threading
 import time
@@ -167,14 +168,15 @@ class Tube:
         """Take a link out of the last played list. Its audio goes with the
         usual clean-up, a day later."""
         with self.lock:
-            entries = [e for e in self._load(self.history_file) if e["url"] != url]
-            self._save(self.history_file, entries)
+            entries = self._load(self.history_file)
+            self._touch(e for e in entries if e["url"] == url)
+            self._save(self.history_file, [e for e in entries if e["url"] != url])
 
     def forget_plays(self, url: str) -> None:
         """Take a link out of the most played list, count and all."""
         with self.lock:
             plays = self._load(self.plays_file, dict)
-            plays.pop(url, None)
+            self._touch([plays.pop(url)] if url in plays else [])
             self._save(self.plays_file, plays)
 
     def file(self, name: str) -> Path | None:
@@ -204,11 +206,23 @@ class Tube:
         temporary.write_text(json.dumps(data, indent=2))
         temporary.replace(path)
 
+    def _touch(self, entries) -> None:
+        """Start a song's day afresh: its files' time is when it was last
+        listed, not when it was downloaded."""
+        for entry in entries:
+            for path in self.cache.glob(glob.escape(Path(entry["name"]).stem) + ".*"):
+                os.utime(path)
+
     def _prune(self, entries: list[dict], most: list[dict]) -> None:
         """Delete the audio of songs neither in the history nor among the most
-        played, once it is a day old."""
+        played, a day after they left both."""
         kept = {Path(e["name"]).stem for e in [*entries, *most]}
-        cutoff = time.time() - KEEP_AFTER_SECONDS
+        now = time.time()
         for path in self.cache.iterdir():
-            if path.is_file() and path.stem not in kept and path.stat().st_mtime < cutoff:
+            if not path.is_file():
+                continue
+            if path.stem in kept:
+                # Still listed: the day starts only once it is not.
+                os.utime(path, (now, now))
+            elif path.stat().st_mtime < now - KEEP_AFTER_SECONDS:
                 path.unlink(missing_ok=True)
