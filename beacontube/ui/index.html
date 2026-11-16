@@ -9,40 +9,53 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div id="standalone" class="notice" hidden>
+    <div id="standalone" class="standalone" hidden>
       Open this page from its tab in Beacon to play music. On its own it can only fetch and list links.
     </div>
-    <main>
-      <section id="banner" class="detail-header" hidden></section>
-      <form id="form" autocomplete="off" role="search">
+
+    <section id="hero" class="hero" aria-live="polite"></section>
+
+    <!-- Sticky, so a search is one keystroke away however far down the lists are. -->
+    <div class="search-bar">
+      <form id="form" class="search" autocomplete="off" role="search">
+        <svg class="search__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"
+          />
+        </svg>
         <input
-          id="url"
+          id="query"
           type="search"
           enterkeyhint="search"
           placeholder="Search YouTube, or paste a link"
           aria-label="Search YouTube, or paste a link"
         />
+        <kbd class="search__key" aria-hidden="true">/</kbd>
         <button id="go" type="submit" class="pill">Search</button>
       </form>
-      <p id="note" role="status"></p>
-      <section id="results" hidden>
-        <div class="results-head">
-          <h2 id="results-title">Results</h2>
-          <button id="close-results" type="button" class="pill ghost small">Close</button>
+    </div>
+
+    <main>
+      <section id="results" class="section" hidden>
+        <div class="section__head">
+          <h2 id="results-title" class="section-title">Results</h2>
+          <button id="close-results" type="button" class="pill tonal small">Close</button>
         </div>
-        <ul id="result-list" class="result-list"></ul>
+        <ul id="result-list" class="cards"></ul>
       </section>
-      <div class="lists">
-        <section>
-          <h2>Last played</h2>
-          <ul id="recent"></ul>
-        </section>
-        <section>
-          <h2>Most played</h2>
-          <ul id="most-played"></ul>
-        </section>
-      </div>
+
+      <section class="section">
+        <h2 class="section-title">Recently played</h2>
+        <ul id="recent" class="tiles"></ul>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Most played</h2>
+        <ol id="most-played" class="ranked"></ol>
+      </section>
     </main>
+
+    <div id="toast" class="toast" role="status"></div>
     <script src="app.js"></script>
   </body>
 </html>

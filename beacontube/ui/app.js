@@ -1,9 +1,17 @@
 const ICONS = {
   play: '<path d="M8 5v14l11-7z"/>',
+  next: '<path d="M3 10h11v2H3zm0-4h11v2H3zm0 8h7v2H3zm13-1v8l6-4z"/>',
   queue: '<path d="M3 10h11v2H3zm0-4h11v2H3zm0 8h7v2H3zm16-1v-3h-2v3h-3v2h3v3h2v-3h3v-2z"/>',
-  remove: '<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>',
+  remove:
+    '<path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>',
+  history:
+    '<path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.95 8.95 0 0 0 13 21a9 9 0 0 0 0-18m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"/>',
+  chart: '<path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/>',
+  search:
+    '<path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"/>',
 }
-const icon = (name) => `<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`
+const icon = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`
+const BARS = '<span class="bars" aria-label="Playing"><i></i><i></i><i></i></span>'
 const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const minutes = (seconds) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
@@ -14,33 +22,40 @@ const host = (url) => {
     return ''
   }
 }
-const when = (seconds) =>
-  new Date(seconds * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
-
-const form = document.getElementById('form')
-const input = document.getElementById('url')
-const go = document.getElementById('go')
-const results = document.getElementById('results')
-const resultsTitle = document.getElementById('results-title')
-const resultList = document.getElementById('result-list')
-const note = document.getElementById('note')
-const banner = document.getElementById('banner')
-const recentList = document.getElementById('recent')
-const topList = document.getElementById('most-played')
-
-let recent = []
-let mostPlayed = []
-let busy = false
-let answered = null
-let searched = 0
-
+const when = (seconds) => {
+  const ago = Date.now() / 1000 - seconds
+  if (ago < 60) return 'just now'
+  if (ago < 3600) return `${Math.floor(ago / 60)} min ago`
+  if (ago < 86400) return `${Math.floor(ago / 3600)} h ago`
+  return new Date(seconds * 1000).toLocaleDateString([], { dateStyle: 'medium' })
+}
+const joined = (...parts) => parts.filter(Boolean).join(' · ')
 // A link plays; anything else is searched for.
 const isLink = (text) => /^https?:\/\/\S+$/i.test(text.trim())
 
-function say(text, error = false) {
-  note.textContent = text
-  note.classList.toggle('error', error)
-}
+const $ = (id) => document.getElementById(id)
+const hero = $('hero')
+const form = $('form')
+const input = $('query')
+const go = $('go')
+const results = $('results')
+const resultsTitle = $('results-title')
+const resultList = $('result-list')
+const recentList = $('recent')
+const topList = $('most-played')
+const toastBox = $('toast')
+
+let recent = []
+let mostPlayed = []
+let found = []
+// The link being fetched: yt-dlp downloads one at a time, so one is enough.
+let pending = null
+// What Beacon says is playing: {title, artist, album} or null.
+let nowPlaying = null
+let answered = null
+let searched = 0
+
+// --- talking to Beacon and to the app -----------------------------------------
 
 // Beacon answers every beacon.play with beacon.played.
 function send(item, mode) {
@@ -56,85 +71,13 @@ function send(item, mode) {
   })
 }
 
-async function play(url, mode) {
-  if (busy) return
-  busy = true
-  say('Fetching the audio…')
-  try {
-    const response = await fetch('api/play', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    })
-    const data = await response.json()
-    if (!response.ok) return say(data.error || 'Could not play that link', true)
-    const result = await send(data.item, mode)
-    if (!result.ok) return say(result.error || 'Beacon could not play that', true)
-    say(mode === 'queue' ? `Added ${data.item.title}` : `Playing ${data.item.title}`)
-    await load()
-  } catch {
-    say('Could not reach BeaconTube', true)
-  } finally {
-    busy = false
-  }
-}
-
-async function find(query) {
-  const asked = ++searched
-  say('Searching…')
-  results.hidden = false
-  resultsTitle.textContent = `Results for “${query}”`
-  resultList.innerHTML = '<li class="empty">Searching…</li>'
-  let data
-  try {
-    const response = await fetch(`api/search?q=${encodeURIComponent(query)}`)
-    data = await response.json()
-    if (asked !== searched) return
-    if (!response.ok) {
-      resultList.innerHTML = ''
-      return say(data.error || 'The search did not work', true)
-    }
-  } catch {
-    if (asked === searched) say('Could not reach BeaconTube', true)
-    return
-  }
-  say('')
-  resultList.innerHTML = data.length
-    ? data
-        .map(
-          (result) => `
-      <li class="row" data-url="${esc(result.url)}">
-        <img class="thumb" src="${esc(result.thumbnail)}" alt="" loading="lazy">
-        <div class="meta">
-          <div class="title">${esc(result.title)}</div>
-          <div class="sub">${esc([result.artist, result.duration && minutes(result.duration)].filter(Boolean).join(' · '))}</div>
-        </div>
-        <button data-url="${esc(result.url)}" data-mode="now" title="Play">${icon('play')}</button>
-        <button data-url="${esc(result.url)}" data-mode="queue" title="Add to queue">${icon('queue')}</button>
-      </li>`,
-        )
-        .join('')
-    : '<li class="empty">Nothing found</li>'
-}
-
-function closeResults() {
-  searched++
-  results.hidden = true
-  resultList.innerHTML = ''
-}
-
-async function forget(list, url) {
-  try {
-    await fetch(`api/${list}/remove`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    })
-  } catch {
-    return say('Could not reach BeaconTube', true)
-  }
-  say('Removed')
-  await load()
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return { response, data: await response.json() }
 }
 
 async function fetchJSON(path) {
@@ -145,88 +88,234 @@ async function fetchJSON(path) {
   }
 }
 
-async function load() {
-  ;[recent, mostPlayed] = await Promise.all([fetchJSON('api/history'), fetchJSON('api/most-played')])
-  renderBanner()
-  renderList(recentList, recent, (entry) => [
-    entry.item.artist,
-    host(entry.url),
-    entry.item.duration && minutes(entry.item.duration),
-  ], (entry) => `Played ${when(entry.playedAt)}`, 'Links you play show up here',
-    'history', 'Remove from last played')
-  renderList(topList, mostPlayed, (entry) => [
-    entry.item.artist,
-    host(entry.url),
-    entry.item.duration && minutes(entry.item.duration),
-  ], (entry) => `${entry.plays} ${entry.plays === 1 ? 'play' : 'plays'}`, 'Links you play often show up here',
-    'most-played', 'Remove from most played')
+const DONE = { now: 'Playing', next: 'Plays next:', queue: 'Added to the queue:' }
+
+async function play(url, mode, title) {
+  if (pending) return toast(`Still fetching ${pending.title || 'the last link'}…`)
+  pending = { url, title }
+  renderAll()
+  toast(title ? `Fetching ${title}…` : 'Fetching the audio…', { stay: true })
+  try {
+    const { response, data } = await post('api/play', { url })
+    if (!response.ok) return toast(data.error || 'Could not play that link', { error: true })
+    const result = await send(data.item, mode)
+    if (!result.ok) return toast(result.error || 'Beacon could not play that', { error: true })
+    toast(`${DONE[mode]} ${data.item.title}`)
+  } catch {
+    toast('Could not reach BeaconTube', { error: true })
+  } finally {
+    pending = null
+    await load()
+  }
 }
 
-// The banner shows the last link played, in the same layout as Beacon's own
-// detail headers: its picture behind the text, and its details beside it.
-function renderBanner() {
-  const latest = recent[0]
-  banner.hidden = false
-  if (!latest) {
-    banner.classList.add('detail-header--text-only')
-    banner.innerHTML = `
-      <div class="detail-header__content">
-        <div class="detail-header__info">
-          <div class="detail-header__title">BeaconTube</div>
-          <div class="detail-header__subtitle">Search below, or paste a link to play it</div>
+async function forget(list, url) {
+  try {
+    await post(`api/${list}/remove`, { url })
+  } catch {
+    return toast('Could not reach BeaconTube', { error: true })
+  }
+  await load()
+}
+
+async function load() {
+  ;[recent, mostPlayed] = await Promise.all([fetchJSON('api/history'), fetchJSON('api/most-played')])
+  renderAll()
+}
+
+async function find(query) {
+  const asked = ++searched
+  results.hidden = false
+  resultsTitle.textContent = `Results for “${query}”`
+  found = null
+  renderResults()
+  try {
+    const response = await fetch(`api/search?q=${encodeURIComponent(query)}`)
+    const data = await response.json()
+    if (asked !== searched) return
+    if (!response.ok) {
+      found = []
+      renderResults()
+      return toast(data.error || 'The search did not work', { error: true })
+    }
+    found = data
+  } catch {
+    if (asked !== searched) return
+    found = []
+    toast('Could not reach BeaconTube', { error: true })
+  }
+  renderResults()
+}
+
+function closeResults() {
+  searched++
+  results.hidden = true
+  found = []
+}
+
+// --- drawing ---------------------------------------------------------------------
+
+// Beacon names what it plays by title and artist; that is all there is to
+// tell its song apart from the others here.
+const isPlaying = (item) =>
+  nowPlaying && nowPlaying.title === item.title && (nowPlaying.artist || '') === (item.artist || '')
+const isPending = (url) => pending?.url === url
+
+function stateClass(url, item) {
+  if (isPending(url)) return 'is-pending'
+  return item && isPlaying(item) ? 'is-playing' : ''
+}
+
+function actions(url, title, { remove, play = true } = {}) {
+  const attrs = `data-url="${esc(url)}" data-title="${esc(title)}"`
+  return `
+    ${play ? `<button class="icon-btn" ${attrs} data-mode="now" title="Play">${icon('play')}</button>` : ''}
+    <button class="icon-btn" ${attrs} data-mode="next" title="Play next">${icon('next')}</button>
+    <button class="icon-btn" ${attrs} data-mode="queue" title="Add to queue">${icon('queue')}</button>
+    ${remove ? `<button class="icon-btn" data-remove="${remove.list}" data-url="${esc(url)}" title="${remove.label}">${icon('remove')}</button>` : ''}`
+}
+
+function picture(src, className) {
+  return src
+    ? `<img class="${className}" src="${esc(src)}" alt="" loading="lazy">`
+    : `<div class="${className} ${className}--empty">${icon('play')}</div>`
+}
+
+// The hero shows the song Beacon is playing when it came from here, the last
+// one played otherwise: its picture blurred behind it, as Beacon's own does.
+function renderHero() {
+  const playing = recent.find((entry) => isPlaying(entry.item))
+  const shown = playing || recent[0]
+  if (!shown) {
+    hero.className = 'hero hero--empty'
+    hero.innerHTML = `
+      <div class="hero__content">
+        <div class="hero__info">
+          <div class="eyebrow">BeaconTube</div>
+          <h1 class="display-title">Play anything with a link</h1>
+          <p class="hero__sub">Search YouTube below, or paste a link anywhere on this page.</p>
         </div>
       </div>`
     return
   }
-  const { url, playedAt, cover, item } = latest
-  const details = [host(url), item.duration && minutes(item.duration), `Played ${when(playedAt)}`]
-  banner.classList.remove('detail-header--text-only')
-  banner.innerHTML = `
-    <div class="detail-header__backdrop"></div>
-    <div class="detail-header__scrim"></div>
-    <div class="detail-header__content">
-      ${cover ? `<img class="detail-header__cover" src="${esc(cover)}" alt="">` : ''}
-      <div class="detail-header__info">
-        <div class="detail-header__eyebrow">Last played</div>
-        <div class="detail-header__title">${esc(item.title)}</div>
-        <div class="detail-header__subtitle">${esc(item.artist)}</div>
-        <div class="detail-header__meta">${esc(details.filter(Boolean).join(' · '))}</div>
-        <div class="detail-header__actions">
-          <button class="pill" data-url="${esc(url)}" data-mode="now">Play</button>
-          <button class="pill ghost" data-url="${esc(url)}" data-mode="queue">Add to queue</button>
+  const { url, playedAt, cover, item } = shown
+  hero.className = `hero ${stateClass(url, item)}`
+  hero.innerHTML = `
+    <div class="hero__backdrop"></div>
+    <div class="hero__scrim"></div>
+    <div class="hero__content">
+      ${cover ? `<img class="hero__cover" src="${esc(cover)}" alt="">` : ''}
+      <div class="hero__info">
+        <div class="eyebrow">${playing ? `${BARS} Now playing` : 'Last played'}</div>
+        <h1 class="display-title" title="${esc(item.title)}">${esc(item.title)}</h1>
+        <p class="hero__sub">${esc(joined(item.artist, host(url), item.duration && minutes(item.duration), !playing && when(playedAt)))}</p>
+        <div class="hero__actions">
+          <button class="pill" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="now">${icon('play')} Play</button>
+          <button class="pill tonal" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="next">${icon('next')} Play next</button>
+          <button class="pill tonal" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="queue">${icon('queue')} Add to queue</button>
         </div>
       </div>
     </div>`
-  if (cover) {
-    banner
-      .querySelector('.detail-header__backdrop')
-      .style.setProperty('--backdrop-image', `url("${cover}")`)
-  }
+  if (cover) hero.querySelector('.hero__backdrop').style.backgroundImage = `url("${cover}")`
 }
 
-function renderList(element, entries, details, line, empty, list, label) {
-  element.innerHTML = entries.length
-    ? entries
-        .map((entry) => {
-          const picture = entry.cover
-            ? `<img class="thumb" src="${esc(entry.cover)}" alt="" loading="lazy">`
-            : '<div class="thumb"></div>'
+function empty(iconName, title, line) {
+  return `<li class="empty"><span class="empty__ring">${icon(iconName)}</span>
+    <div><div class="empty__title">${title}</div><div class="empty__line">${line}</div></div></li>`
+}
+
+// Like Beacon's Home: the recently played as tiles, the whole tile plays.
+function renderRecent() {
+  recentList.innerHTML = recent.length
+    ? recent
+        .map(({ url, cover, playedAt, item }) => {
+          const playing = isPlaying(item)
           return `
-      <li class="row" data-url="${esc(entry.url)}">
-        ${picture}
-        <div class="meta">
-          <div class="title">${esc(entry.item.title)}</div>
-          <div class="sub">${esc(details(entry).filter(Boolean).join(' · '))}</div>
-          <div class="sub">${esc(line(entry))}</div>
+      <li class="tile ${stateClass(url, item)}" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="now" title="${esc(item.title)}">
+        <div class="tile__art">${picture(cover, 'tile__img')}<span class="tile__mark">${playing ? BARS : icon('play')}</span></div>
+        <div class="tile__text">
+          <div class="tile__title">${esc(item.title)}</div>
+          <div class="tile__sub">${esc(joined(item.artist, when(playedAt)))}</div>
         </div>
-        <button data-url="${esc(entry.url)}" data-mode="now" title="Play">${icon('play')}</button>
-        <button data-url="${esc(entry.url)}" data-mode="queue" title="Add to queue">${icon('queue')}</button>
-        <button data-remove="${list}" data-url="${esc(entry.url)}" title="${label}">${icon('remove')}</button>
+        <!-- The whole tile plays; these say how else. -->
+        <div class="tile__actions">${actions(url, item.title, { play: false, remove: { list: 'history', label: 'Remove from recently played' } })}</div>
       </li>`
         })
         .join('')
-    : `<li class="empty">${empty}</li>`
+    : empty('history', 'Nothing played yet', 'What you play from here shows up here.')
 }
+
+// Beacon's most played songs: a rank, the song, its plays, down one column
+// and on into the next.
+function renderTop() {
+  topList.innerHTML = mostPlayed.length
+    ? mostPlayed
+        .map(({ url, cover, plays, item }, index) => {
+          const playing = isPlaying(item)
+          return `
+      <li class="song ${stateClass(url, item)}" data-url="${esc(url)}" data-title="${esc(item.title)}" data-mode="now">
+        <span class="song__rank">${playing ? BARS : index + 1}</span>
+        ${picture(cover, 'song__img')}
+        <div class="song__text">
+          <div class="song__title">${esc(item.title)}</div>
+          <div class="song__sub">${esc(joined(item.artist, item.duration && minutes(item.duration)))}</div>
+        </div>
+        <span class="song__plays">${plays} ${plays === 1 ? 'play' : 'plays'}</span>
+        <div class="song__actions">${actions(url, item.title, { remove: { list: 'most-played', label: 'Remove from most played' } })}</div>
+      </li>`
+        })
+        .join('')
+    : empty('chart', 'No favourites yet', 'Songs you play again and again rise to the top here.')
+}
+
+function renderResults() {
+  if (results.hidden) return
+  if (found === null) {
+    resultList.innerHTML = Array.from(
+      { length: 8 },
+      () => `<li class="card card--skeleton" aria-hidden="true"><div class="card__art"></div>
+        <div class="card__text"><div class="skeleton-line"></div><div class="skeleton-line short"></div></div></li>`,
+    ).join('')
+    return
+  }
+  resultList.innerHTML = found.length
+    ? found
+        .map(
+          (result) => `
+      <li class="card ${stateClass(result.url, result)}" data-url="${esc(result.url)}" data-title="${esc(result.title)}" data-mode="now">
+        <div class="card__art">
+          <img src="${esc(result.thumbnail)}" alt="" loading="lazy">
+          ${result.duration ? `<span class="card__time">${minutes(result.duration)}</span>` : ''}
+          <span class="card__mark">${isPlaying(result) ? BARS : icon('play')}</span>
+        </div>
+        <div class="card__text">
+          <div class="card__title" title="${esc(result.title)}">${esc(result.title)}</div>
+          <div class="card__sub">${esc(result.artist)}</div>
+        </div>
+        <div class="card__actions">${actions(result.url, result.title)}</div>
+      </li>`,
+        )
+        .join('')
+    : empty('search', 'Nothing found', 'Try other words, or paste the link itself.')
+}
+
+function renderAll() {
+  renderHero()
+  renderRecent()
+  renderTop()
+  renderResults()
+}
+
+let toastTimer = null
+function toast(text, { error = false, stay = false } = {}) {
+  toastBox.textContent = text
+  toastBox.classList.toggle('error', error)
+  toastBox.classList.add('show')
+  clearTimeout(toastTimer)
+  if (!stay) toastTimer = setTimeout(() => toastBox.classList.remove('show'), error ? 4000 : 2400)
+}
+
+// --- input -----------------------------------------------------------------------
 
 function submit(text) {
   text = text.trim()
@@ -241,13 +330,25 @@ form.addEventListener('submit', (event) => {
 })
 
 // The button says what Enter will do.
-input.addEventListener('input', () => {
-  go.textContent = isLink(input.value) ? 'Play' : 'Search'
-})
+const label = () => (go.textContent = isLink(input.value) ? 'Play' : 'Search')
+input.addEventListener('input', label)
 input.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeResults()
+  if (event.key === 'Escape') {
+    closeResults()
+    input.blur()
+  }
 })
-document.getElementById('close-results').addEventListener('click', closeResults)
+$('close-results').addEventListener('click', closeResults)
+
+// "/" jumps to the search from anywhere, as on many sites.
+addEventListener('keydown', (event) => {
+  const typing = event.target instanceof HTMLInputElement
+  if (event.key === '/' && !typing && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    input.focus()
+    input.select()
+  }
+})
 
 // A pasted link plays straight away, in the field or anywhere on the page.
 // Pasted words land in the field, to be searched for with Enter.
@@ -256,29 +357,25 @@ addEventListener('paste', (event) => {
   if (isLink(text)) {
     event.preventDefault()
     input.value = text.trim()
-    go.textContent = 'Play'
+    label()
     play(input.value, 'now')
   } else if (event.target !== input && text.trim()) {
     event.preventDefault()
     input.value = text.trim()
-    go.textContent = 'Search'
+    label()
     input.focus()
   }
 })
 
-// A row plays its link; its buttons say how (now or queued) or remove it.
-function onPlayClick(event) {
-  const removing = event.target.closest('button[data-remove]')
+// One handler for every list: a button says how to play (or removes), and
+// anywhere else on a row, tile or card plays it now.
+document.addEventListener('click', (event) => {
+  const removing = event.target.closest('[data-remove]')
   if (removing) return forget(removing.dataset.remove, removing.dataset.url)
-  const target = event.target.closest('[data-url]')
+  const target = event.target.closest('[data-url][data-mode]')
   if (!target) return
-  const button = event.target.closest('button[data-url]')
-  play(target.dataset.url, button?.dataset.mode ?? 'now')
-}
-resultList.addEventListener('click', onPlayClick)
-recentList.addEventListener('click', onPlayClick)
-topList.addEventListener('click', onPlayClick)
-banner.addEventListener('click', onPlayClick)
+  play(target.dataset.url, target.dataset.mode, target.dataset.title)
+})
 
 addEventListener('message', (event) => {
   if (event.source !== parent) return
@@ -286,6 +383,9 @@ addEventListener('message', (event) => {
   if (message.type === 'beacon.played') {
     answered?.(message)
     answered = null
+  } else if (message.type === 'beacon.nowPlaying') {
+    nowPlaying = message.item
+    renderAll()
   } else if (message.type === 'beacon.theme') {
     const c = message.colors
     const s = document.documentElement.style
@@ -294,10 +394,17 @@ addEventListener('message', (event) => {
     s.setProperty('--surface', c.surface)
     s.setProperty('--primary', c.primary)
     s.setProperty('--on-primary', c['on-primary'])
+    if (c.error) s.setProperty('--error', c.error)
     s.colorScheme = message.dark ? 'dark' : 'light'
+    document.documentElement.classList.toggle('light', !message.dark)
   }
 })
 
-document.getElementById('standalone').hidden = parent !== window
+$('standalone').hidden = parent !== window
+// Relative times ("5 min ago") stay right while the tab is open.
+setInterval(() => {
+  renderHero()
+  renderRecent()
+}, 60000)
 load()
 parent.postMessage({ type: 'beacon.ready' }, '*')
