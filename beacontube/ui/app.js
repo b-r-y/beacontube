@@ -150,7 +150,6 @@ function show(next, { sort, filter } = {}) {
   if (sort) librarySort.value = sort
   if (filter !== undefined) libraryFilter.value = filter
   homeView.hidden = next !== 'home'
-  hero.hidden = next !== 'home'
   libraryView.hidden = next !== 'library'
   for (const tab of document.querySelectorAll('[data-view]')) {
     const active = tab.dataset.view === next
@@ -158,7 +157,12 @@ function show(next, { sort, filter } = {}) {
     tab.setAttribute('aria-selected', String(active))
   }
   renderLibrary()
-  scrollTo({ top: 0 })
+  // The hero stays on both tabs, so nothing above the lists moves. Only when
+  // the search bar is already stuck to the top does the new tab start right
+  // under it, rather than somewhere down the old tab's length.
+  const stuckAt =
+    hero.offsetTop + hero.offsetHeight + parseFloat(getComputedStyle(hero).marginBottom)
+  if (scrollY > stuckAt) scrollTo({ top: stuckAt })
 }
 
 async function find(query) {
