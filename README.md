@@ -18,7 +18,7 @@ Beacon, with a field for the link, a Play button, and the last 10 links played.
 
 ## Running it
 
-It needs no Docker. Needs Python 3.13, [uv](https://docs.astral.sh/uv/), and
+With Docker, see [below](#with-docker). Without it, it needs Python 3.13, [uv](https://docs.astral.sh/uv/), and
 [Node.js](https://nodejs.org/). YouTube hides most of its audio behind a JavaScript
 challenge, and yt-dlp runs it with Node. Without Node, many YouTube links fail with
 "This video is not available", even ones that play in a browser.
@@ -37,6 +37,31 @@ The default port is `8802` (`PORT=...` to change it). The data folder defaults t
 | `DATA_DIR`     | `./data`    | History, cache and signing secret                         |
 | `SECRET`       | made once   | Signs song addresses. Leave it unset unless you run copies |
 | `HOST`, `PORT` | `0.0.0.0:8802` | Where to listen                                        |
+
+### With Docker
+
+The image comes with Node and everything else it needs. Copy
+[`compose.yaml`](compose.yaml), set your own `TOKEN` in it, and start it:
+
+```bash
+docker compose up -d
+```
+
+Or without Compose:
+
+```bash
+docker run -d --name beacontube --restart unless-stopped \
+  -p 8802:8802 -v ./data:/data -e TOKEN=change-me \
+  ghcr.io/b-r-y/beacontube:latest
+```
+
+The data folder is `/data` inside the container. The app runs as user ID 1000, so the
+folder you mount there has to be writable for that user. The settings above work the same
+way, as `environment` entries.
+
+To build the image yourself, run `docker build -t beacontube .`, or use `build: .` in
+`compose.yaml` instead of `image:`. The image on GitHub is built by hand, from the
+**Docker image** workflow in the Actions tab.
 
 ## Connecting Beacon
 
