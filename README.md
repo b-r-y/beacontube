@@ -40,11 +40,23 @@ The default port is `8802` (`PORT=...` to change it). The data folder defaults t
 
 ### With Docker
 
-The image comes with Node and everything else it needs. Copy
-[`compose.yaml`](compose.yaml), set your own `TOKEN` in it, and start it:
+The image comes with Node and everything else it needs. Put this in a `compose.yaml`
+(the same as the one in this repository), set your own `TOKEN`, and start it with
+`docker compose up -d`:
 
-```bash
-docker compose up -d
+```yaml
+services:
+  beacontube:
+    image: ghcr.io/b-r-y/beacontube:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      SOURCE_NAME: BeaconTube
+      # Set the same value in Beacon under Settings > Library > External sources.
+      TOKEN: change-me
+    ports:
+      - "8802:8802"
 ```
 
 Or without Compose:
