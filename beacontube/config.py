@@ -19,11 +19,12 @@ class Config:
     host: str
     port: int
     # How long a song's audio stays after it left the history and the most
-    # played list. Beacon asks for a day at least.
+    # played list, in hours. Set in days (KEEP_DAYS): Beacon asks for a day at
+    # least, so hours would only invite a value below it.
     keep_hours: float = 24
 
 
-MIN_KEEP_HOURS = 24
+MIN_KEEP_DAYS = 1
 
 
 def _secret(data_dir: Path) -> bytes:
@@ -44,20 +45,21 @@ def _secret(data_dir: Path) -> bytes:
 
 
 def _keep_hours() -> float:
-    raw = os.environ.get("KEEP_HOURS", "")
+    """KEEP_DAYS, in hours: a whole or a part day, one at least."""
+    raw = os.environ.get("KEEP_DAYS", "")
     if not raw:
-        return MIN_KEEP_HOURS
+        return MIN_KEEP_DAYS * 24
     try:
-        hours = float(raw)
+        days = float(raw)
     except ValueError:
-        raise SystemExit(f"KEEP_HOURS has to be a number of hours, not {raw!r}.") from None
-    if hours < MIN_KEEP_HOURS:
+        raise SystemExit(f"KEEP_DAYS has to be a number of days, not {raw!r}.") from None
+    if days < MIN_KEEP_DAYS:
         logging.getLogger("beacontube").warning(
-            f"KEEP_HOURS={raw} is less than a day; keeping files for {MIN_KEEP_HOURS} hours,"
-            " since Beacon may ask for a song again within a day."
+            f"KEEP_DAYS={raw} is less than a day; keeping files for a day,"
+            " since Beacon may ask for a song again within one."
         )
-        return MIN_KEEP_HOURS
-    return hours
+        return MIN_KEEP_DAYS * 24
+    return days * 24
 
 
 def load() -> Config:

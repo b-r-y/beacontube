@@ -20,7 +20,7 @@ import yt_dlp
 HISTORY_LENGTH = 10
 MAX_URL_LENGTH = 2048
 # Songs that left the lists keep their files this long, so a queue restored
-# later still plays. Beacon asks for at least a day; KEEP_HOURS sets more.
+# later still plays. Beacon asks for at least a day; KEEP_DAYS sets more.
 KEEP_AFTER_SECONDS = 24 * 3600
 
 AUDIO_TYPES = {

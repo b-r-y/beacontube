@@ -65,7 +65,7 @@ def test_a_removed_song_keeps_its_files_for_a_day(make_client):
     assert files and all(path.exists() for path in files)
 
 
-def test_keep_hours_sets_how_long_files_stay(tmp_path):
+def test_the_keep_time_sets_how_long_files_stay(tmp_path):
     tube = Tube(
         tmp_path / "cache", tmp_path / "history.json", fetch=fake_download, keep_seconds=48 * 3600
     )
@@ -82,23 +82,25 @@ def test_keep_hours_sets_how_long_files_stay(tmp_path):
     assert not any(path.exists() for path in files)
 
 
-def test_keep_hours_comes_from_the_environment(monkeypatch, tmp_path):
+def test_keep_days_comes_from_the_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.delenv("KEEP_HOURS", raising=False)
+    monkeypatch.delenv("KEEP_DAYS", raising=False)
     assert load().keep_hours == 24
-    monkeypatch.setenv("KEEP_HOURS", "168")
+    monkeypatch.setenv("KEEP_DAYS", "7")
     assert load().keep_hours == 168
+    monkeypatch.setenv("KEEP_DAYS", "1.5")
+    assert load().keep_hours == 36
 
 
-def test_keep_hours_is_at_least_a_day(monkeypatch, tmp_path, caplog):
+def test_keep_days_is_at_least_one(monkeypatch, tmp_path, caplog):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("KEEP_HOURS", "2")
+    monkeypatch.setenv("KEEP_DAYS", "0.5")
     assert load().keep_hours == 24
     assert "less than a day" in caplog.text
 
 
-def test_keep_hours_has_to_be_a_number(monkeypatch, tmp_path):
+def test_keep_days_has_to_be_a_number(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("KEEP_HOURS", "a week")
-    with pytest.raises(SystemExit, match="KEEP_HOURS"):
+    monkeypatch.setenv("KEEP_DAYS", "a week")
+    with pytest.raises(SystemExit, match="KEEP_DAYS"):
         load()

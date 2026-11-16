@@ -36,7 +36,7 @@ The default port is `8802` (`PORT=...` to change it). The data folder defaults t
 | `SOURCE_NAME`  | `BeaconTube`| The name shown in the page's header                       |
 | `DATA_DIR`     | `./data`    | History, cache and signing secret                         |
 | `SECRET`       | made once   | Signs song addresses. Leave it unset unless you run copies |
-| `KEEP_HOURS`   | `24`        | How long a song's audio stays once it is in neither list. At least 24 |
+| `KEEP_DAYS`    | `1`         | Days a song's audio stays once it is in neither list. At least 1 |
 | `HOST`, `PORT` | `0.0.0.0:8802` | Where to listen                                        |
 
 ## Connecting Beacon
