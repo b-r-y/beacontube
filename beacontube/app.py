@@ -26,7 +26,11 @@ _IMMUTABLE = "private, max-age=86400"
 
 
 def create_app(config: Config, tube: Tube | None = None):
-    tube = tube or Tube(config.data_dir / "cache", config.data_dir / "history.json")
+    tube = tube or Tube(
+        config.data_dir / "cache",
+        config.data_dir / "history.json",
+        keep_seconds=config.keep_hours * 3600,
+    )
 
     def item_of(entry: dict) -> dict:
         """What the page hands to Beacon for one song. Addresses relative to
