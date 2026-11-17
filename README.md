@@ -28,7 +28,7 @@ so the page loads nothing from elsewhere.
 
 ## Running it
 
-It needs no Docker. Needs Python 3.13, [uv](https://docs.astral.sh/uv/), and
+With Docker, see [below](#with-docker). Without it, it needs Python 3.13, [uv](https://docs.astral.sh/uv/), and
 [Node.js](https://nodejs.org/). YouTube hides most of its audio behind a JavaScript
 challenge, and yt-dlp runs it with Node. Without Node, many YouTube links fail with
 "This video is not available", even ones that play in a browser.
@@ -48,6 +48,43 @@ The default port is `8802` (`PORT=...` to change it). The data folder defaults t
 | `SECRET`       | made once   | Signs song addresses. Leave it unset unless you run copies |
 | `KEEP_DAYS`    | `1`         | Days a song's audio stays once it is in neither list. At least 1 |
 | `HOST`, `PORT` | `0.0.0.0:8802` | Where to listen                                        |
+
+### With Docker
+
+The image comes with Node and everything else it needs. Put this in a `compose.yaml`
+(the same as the one in this repository), set your own `TOKEN`, and start it with
+`docker compose up -d`:
+
+```yaml
+services:
+  beacontube:
+    image: ghcr.io/b-r-y/beacontube:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      SOURCE_NAME: BeaconTube
+      # Set the same value in Beacon under Settings > Library > External sources.
+      TOKEN: change-me
+    ports:
+      - "8802:8802"
+```
+
+Or without Compose:
+
+```bash
+docker run -d --name beacontube --restart unless-stopped \
+  -p 8802:8802 -v ./data:/data -e TOKEN=change-me \
+  ghcr.io/b-r-y/beacontube:latest
+```
+
+The data folder is `/data` inside the container. The app runs as user ID 1000, so the
+folder you mount there has to be writable for that user. The settings above work the same
+way, as `environment` entries.
+
+To build the image yourself, run `docker build -t beacontube .`, or use `build: .` in
+`compose.yaml` instead of `image:`. The image on GitHub is built by hand, from the
+**Docker image** workflow in the Actions tab.
 
 ## Connecting Beacon
 

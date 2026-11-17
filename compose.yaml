@@ -1,0 +1,15 @@
+services:
+  beacontube:
+    image: ghcr.io/b-r-y/beacontube:latest
+    # To build the image from this folder instead, replace "image" with:
+    # build: .
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+      SOURCE_NAME: BeaconTube
+      # Beacon sends it with every request for the page; set the same value
+      # in Beacon under Settings > Library > External sources.
+      TOKEN: change-me
+    ports:
+      - "8802:8802"
